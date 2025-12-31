@@ -2,7 +2,9 @@
 
 This project turns an ESP32-S3 into a Bluetooth HID mouse that moves automatically to prevent your computer from going to sleep or showing as "Away". It includes a Wi-Fi web interface to control all settings from your smartphone.
 
-<img src="images/web.png" alt="Dashboard Preview" width="400">
+<p align="center">
+  <img src="images/web.png" alt="Web Interface Preview" width="400">
+</p>
 
 ## 🌟 Features
 * **Dual-Mode**: Works as a Bluetooth Mouse and a Wi-Fi Access Point simultaneously.
