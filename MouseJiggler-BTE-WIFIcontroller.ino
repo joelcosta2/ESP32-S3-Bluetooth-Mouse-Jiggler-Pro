@@ -21,6 +21,7 @@
 #include <Preferences.h>
 #include <NimBLEDevice.h>
 #include "index.h" // Holds the HTML/CSS/JS string
+#include <ESPmDNS.h> // Enable jiggler.local
 
 // Hardware Definitions
 #define PIN_NEOPIXEL 48  // Default RGB LED pin for ESP32-S3 (Change to 38 if needed)
@@ -33,7 +34,7 @@ WebServer server(80);
 Preferences prefs;
 
 // Config Variables
-String wifiSSID, wifiPass, btName;
+String apSSID, apPass, staSSID, staPass, btName;
 bool jigglerActive = false;
 int brightness = 30;
 int moveAmount = 2;
@@ -55,17 +56,23 @@ void handleStatus() {
   json += "\"bright\":" + String(brightness) + ",";
   json += "\"rssi\":" + String(getRSSI()) + ",";
   json += "\"timerRemaining\":" + String(timerRunning ? (long)(timerEndMillis - millis()) : 0) + ",";
-  json += "\"ssid\":\"" + wifiSSID + "\",";
-  json += "\"btname\":\"" + btName + "\"";
+  json += "\"apSSID\":\"" + apSSID + "\",";
+  json += "\"apPass\":\"" + apPass + "\",";
+  json += "\"staSSID\":\"" + staSSID + "\",";
+  json += "\"staPass\":\"" + staPass + "\",";
+  json += "\"btname\":\"" + btName + "\",";
+  json += "\"ip\":\"" + (WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : WiFi.softAPIP().toString()) + "\"";
   json += "}";
   server.send(200, "application/json", json);
 }
 
 
 void handleUpdateConfig() {
-  if (server.hasArg("ssid")) { prefs.putString("ssid", server.arg("ssid")); }
-  if (server.hasArg("pass")) { prefs.putString("pass", server.arg("pass")); }
-  if (server.hasArg("bt"))   { prefs.putString("bt", server.arg("bt")); }
+  if (server.hasArg("apSSID")) { prefs.putString("apSSID", server.arg("apSSID")); }
+  if (server.hasArg("apPass")) { prefs.putString("apPass", server.arg("apPass")); }
+  if (server.hasArg("staSSID")){ prefs.putString("staSSID", server.arg("staSSID")); }
+  if (server.hasArg("staPass")){ prefs.putString("staPass", server.arg("staPass")); }
+  if (server.hasArg("bt"))     { prefs.putString("bt", server.arg("bt")); }
   server.send(200, "text/plain", "OK. Restarting...");
   delay(1000);
   ESP.restart();
@@ -82,19 +89,45 @@ void setup() {
   Serial.begin(115200);
   pixels.begin();
   
-  // Initialize Preferences
   prefs.begin("jiggler", false);
   moveAmount = prefs.getInt("move", 2);
   intervalSec = prefs.getInt("interval", 1);
   brightness = prefs.getInt("bright", 30);
-  wifiSSID = prefs.getString("ssid", "ESP32-Mouse-Config");
-  wifiPass = prefs.getString("pass", "12345678");
+  apSSID = prefs.getString("apSSID", "ESP32-Mouse-Config");
+  apPass = prefs.getString("apPass", "12345678");
+  staSSID = prefs.getString("staSSID", "");
+  staPass = prefs.getString("staPass", "");
   btName = prefs.getString("bt", "ESP32-MouseJiggler");
 
   pixels.setBrightness(brightness);
 
   // 1. Setup WiFi
-  WiFi.softAP(wifiSSID.c_str(), wifiPass.c_str());
+  if (staSSID != "") {
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(staSSID.c_str(), staPass.c_str());
+    Serial.print("Connecting to: "); Serial.println(staSSID);
+    
+    unsigned long startAttemptTime = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 30000) {
+      delay(500);
+      Serial.print(".");
+    }
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nCONNECTED!");
+    Serial.print("IP: http://"); Serial.println(WiFi.localIP());
+    
+    if (MDNS.begin("jiggler")) {
+      Serial.println("MDNS responder started");
+      MDNS.addService("http", "tcp", 80); 
+    }
+  } else {
+    Serial.println("\nFALLBACK TO AP MODE");
+    WiFi.mode(WIFI_AP);
+    WiFi.softAP(apSSID.c_str(), apPass.c_str());
+    Serial.print("AP IP: http://"); Serial.println(WiFi.softAPIP());
+  }
 
   // 2. Setup Web Server
   server.on("/", handleRoot);
@@ -110,7 +143,7 @@ void setup() {
   // 3. Initialize Bluetooth Mouse with Custom Name
   bleMouse = new BleMouse(btName.c_str(), "Espressif", 100);
   bleMouse->begin(); 
-
+  
   Serial.println("Jiggler Ready.");
 }
 

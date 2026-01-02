@@ -66,11 +66,14 @@ const char PAGE_MAIN[] PROGMEM = R"=====(
     </div>
 
     <div class='card' style="border-top: 2px solid var(--primary);">
-      <span class='label'>Device Config (Triggers Restart)</span>
-      <span class='label'>WiFi SSID</span>
-      <input type='text' id='ssidInput'>
-      <span class='label'>WiFi Password</span>
-      <input type='password' id='passInput' placeholder='New Password'>
+      <span class='label'>Home WiFi Settings (Station)</span>
+      <input type='text' id='staSSIDInput' placeholder='Home WiFi Name'>
+      <input type='password' id='staPassInput' placeholder='Home Password'>
+      
+      <span class='label'>Local AP Settings (Direct Connect)</span>
+      <input type='text' id='apSSIDInput' placeholder='AP Name'>
+      <input type='password' id='apPassInput' placeholder='AP Password'>
+
       <span class='label'>Bluetooth Name</span>
       <input type='text' id='btInput'>
       <button onclick='saveConfig()' class='btn btn-primary' style="background: #6366f1;">UPDATE & RESTART</button>
@@ -100,13 +103,14 @@ const char PAGE_MAIN[] PROGMEM = R"=====(
     }
 
     function saveConfig() {
-      const ssid = document.getElementById('ssidInput').value;
-      const pass = document.getElementById('passInput').value;
+      const staSSID = document.getElementById('staSSIDInput').value;
+      const staPass = document.getElementById('staPassInput').value;
+      const apSSID = document.getElementById('apSSIDInput').value;
+      const apPass = document.getElementById('apPassInput').value;
       const bt = document.getElementById('btInput').value;
-      if(pass.length > 0 && pass.length < 8) { alert("WiFi Password min 8 chars!"); return; }
-      if(confirm("Device will restart. Continue?")) {
-        fetch(`/updateConfig?ssid=${ssid}&pass=${pass}&bt=${bt}`).then(() => alert("Restarting..."));
-      }
+      
+      fetch(`/updateConfig?staSSID=${staSSID}&staPass=${staPass}&apSSID=${apSSID}&apPass=${apPass}&bt=${bt}`)
+        .then(() => alert("Restarting..."));
     }
 
     function toggleJiggler() { active = !active; fetch('/toggle').then(() => updateUI()); }
@@ -129,14 +133,21 @@ const char PAGE_MAIN[] PROGMEM = R"=====(
       fetch('/status').then(r => r.json()).then(data => {
         active = data.active;
         updateRSSI(data.rssi);
-        document.getElementById('distSlider').value = data.move;
+
+        updateValue('distSlider',  data.move);
         updateLabel('distVal', data.move + 'px');
-        document.getElementById('intSlider').value = data.interval;
-        updateValue('ssidInput',  data.ssid);
-        updateValue('btInput',  data.btname);
+        updateValue('intSlider',  data.interval);
         updateLabel('intVal', data.interval + 's');
-        document.getElementById('brightSlider').value = data.bright;
+        updateValue('brightSlider',  data.bright);
         updateLabel('brightVal', data.bright);
+
+        updateValue('staSSIDInput',  data.staSSID);
+        updateValue('staPassInput',  data.staPass);
+        updateValue('apSSIDInput',  data.apSSID);
+        updateValue('apPassInput',  data.apPass);
+        updateValue('btInput',  data.btname);
+        
+
         if(data.timerRemaining > 0) { timerEnd = Date.now() + data.timerRemaining; }
         updateUI();
       });
